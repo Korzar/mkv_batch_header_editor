@@ -26,7 +26,7 @@ def main():
         window.show()
 
         # Show welcome message
-        QTimer.singleShot(100, lambda: QMessageBox.information(
+        QTimer.singleShot(100, lambda: QMessageBox.about(
             window, "MKV Track Renamer",
             "Welcome to MKV Track Renamer v1.2.0!\n\n"
             "Features:\n"
