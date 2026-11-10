@@ -12,7 +12,8 @@ from PyQt5.QtWidgets import (
     QLabel, QTextEdit, QTabWidget,
     QCheckBox, QProgressBar, QMessageBox,
     QFileDialog, QHeaderView, QAbstractItemView,
-    QListWidgetItem, QMenu, QAction
+    QListWidgetItem, QMenu, QAction, QToolBar, QStyle,
+    QApplication
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
@@ -60,6 +61,8 @@ class MainWindow(QMainWindow):
 
     def init_ui(self):
         """Initialize the main UI"""
+        self.create_toolbar()
+
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
@@ -126,6 +129,50 @@ class MainWindow(QMainWindow):
 
         # Status bar
         self.statusBar().showMessage("Ready - MKVToolNix detected")
+
+    def create_toolbar(self):
+        """Create the top toolbar"""
+        self.toolbar = self.addToolBar("Main Toolbar")
+        self.toolbar.setObjectName("main_toolbar")
+        self.toolbar.setMovable(False)
+        self.toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+
+        # About action
+        about_action = QAction(
+            self.style().standardIcon(QStyle.SP_MessageBoxInformation),
+            "About",
+            self
+        )
+        about_action.setStatusTip("About MKV Track Renamer")
+        about_action.triggered.connect(self.show_about_dialog)
+        self.toolbar.addAction(about_action)
+
+    def show_about_dialog(self):
+        """Show about dialog"""
+        version = QApplication.applicationVersion() or "1.2.0"
+        QMessageBox.about(
+            self, "MKV Track Renamer",
+            f"Welcome to MKV Track Renamer v{version}!\n\n"
+            "Features:\n"
+            "• Edit segment titles\n"
+            "• Configure default/forced track flags\n"
+            "• Customizable language and codec mappings\n"
+            "• Color-coded file groups in preview\n"
+            "• Configuration file support\n"
+            "• Resizable table columns\n"
+            "• File exclusion/removal options\n"
+            "• Auto-sync title to video tracks\n"
+            "• Auto-update subtitle names when forced flag is toggled\n\n"
+            "Getting started:\n"
+            "1. Click 'Add MKV files' to select your files\n"
+            "2. Click 'Analyze files' to examine track information\n"
+            "3. Configure naming rules in the 'Naming rules' tab\n"
+            "4. Generate and customize in the 'Preview changes' tab\n"
+            "5. Apply changes in the 'Apply changes' tab\n\n"
+            "Right-click files to exclude/include or remove them.\n"
+            "Toggle forced flags to auto-update subtitle names.\n\n"
+            "Requires: MKVToolNix (mkvpropedit, mkvmerge)"
+        )
 
     def create_preview_tab(self) -> QWidget:
         """Create the preview changes tab"""
