@@ -62,12 +62,16 @@ mkv_header/
     │   └── rules_config_widget.py
     └── utils/              # Utilities
         ├── __init__.py
-        └── mkv_tools_checker.py
+        ├── mkv_tools_checker.py
+        └── native_dialog.py    # Native multi-folder picker dialog
 ```
 
 ## Usage
 
-1. **Add files**: Click "Add MKV files" to select your MKV files
+1. **Add files or folders**:
+   - Click **"Add MKV files"** to select individual files.
+   - Click **"Add folder(s)"** to select one or more folders (they will be scanned recursively for `.mkv` files).
+   - Alternatively, **drag and drop** files or folders directly into the application window or file list.
 2. **Analyze**: Click "Analyze files" to examine track information
 3. **Configure rules**: Set up naming rules in the "Naming rules" tab
 4. **Preview changes**: Generate and review proposed changes in the "Preview changes" tab

@@ -3,11 +3,12 @@ Main application window
 """
 
 import sys
+import os
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 from PyQt5.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QListWidget, QTableWidget, QTableWidgetItem,
     QLabel, QTextEdit, QTabWidget,
     QCheckBox, QProgressBar, QMessageBox,
@@ -15,7 +16,7 @@ from PyQt5.QtWidgets import (
     QListWidgetItem, QMenu, QAction, QToolBar, QStyle,
     QApplication
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QColor
 
 from ..config.config_manager import ConfigManager
@@ -73,26 +74,35 @@ class MainWindow(QMainWindow):
         left_panel = QWidget()
         left_layout = QVBoxLayout()
 
+        # Enable drag and drop
+        self.setAcceptDrops(True)
+
         # File controls
-        file_controls = QHBoxLayout()
+        file_controls = QGridLayout()
         self.add_files_btn = QPushButton("Add MKV files")
-        self.clear_files_btn = QPushButton("Clear all")
+        self.add_folder_btn = QPushButton("Add folder(s)")
         self.analyze_btn = QPushButton("Analyze files")
+        self.clear_files_btn = QPushButton("Clear all")
+
+        self.add_files_btn.setToolTip("Select MKV files to add to the list")
+        self.add_folder_btn.setToolTip("Select one or more folders to recursively scan for MKV files")
 
         self.add_files_btn.clicked.connect(self.add_files)
+        self.add_folder_btn.clicked.connect(self.add_folders)
         self.clear_files_btn.clicked.connect(self.clear_files)
         self.analyze_btn.clicked.connect(self.analyze_files)
 
-        file_controls.addWidget(self.add_files_btn)
-        file_controls.addWidget(self.clear_files_btn)
-        file_controls.addWidget(self.analyze_btn)
-        file_controls.addStretch()
+        file_controls.addWidget(self.add_files_btn, 0, 0)
+        file_controls.addWidget(self.add_folder_btn, 0, 1)
+        file_controls.addWidget(self.analyze_btn, 1, 0)
+        file_controls.addWidget(self.clear_files_btn, 1, 1)
 
         # File list with context menu
         self.file_list = QListWidget()
         self.file_list.currentItemChanged.connect(self.on_file_selected)
         self.file_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.file_list.customContextMenuRequested.connect(self.show_file_context_menu)
+        self.file_list.installEventFilter(self)
 
         # Progress bar
         self.progress_bar = QProgressBar()
@@ -270,11 +280,15 @@ class MainWindow(QMainWindow):
             return
 
         # Find the corresponding file path
-        file_path = None
-        for fp in self.mkv_files.keys():
-            if Path(fp).name == item.text():
-                file_path = fp
-                break
+        file_path = item.data(Qt.UserRole)
+        if not file_path:
+            item_text = item.text()
+            if item_text.startswith("[EXCLUDED] "):
+                item_text = item_text[11:]
+            for fp in self.mkv_files.keys():
+                if Path(fp).name == item_text:
+                    file_path = fp
+                    break
 
         if file_path is None:
             return
@@ -334,6 +348,8 @@ class MainWindow(QMainWindow):
             file_name = Path(file_path).name
 
             item = QListWidgetItem(file_name)
+            item.setData(Qt.UserRole, file_path)
+            item.setToolTip(file_path)
 
             # Mark excluded files visually
             if file_path in self.excluded_files:
@@ -342,18 +358,91 @@ class MainWindow(QMainWindow):
 
             self.file_list.addItem(item)
 
+    def add_paths(self, paths: List[str]):
+        """Add files and/or folders recursively"""
+        added_count = 0
+        total_found = 0
+        for path_str in paths:
+            if not path_str:
+                continue
+            p = Path(path_str)
+            if not p.exists():
+                continue
+            if p.is_file() and p.suffix.lower() == '.mkv':
+                total_found += 1
+                resolved = str(p.resolve())
+                if resolved not in self.mkv_files:
+                    self.mkv_files[resolved] = None
+                    added_count += 1
+            elif p.is_dir():
+                try:
+                    found_in_folder = []
+                    for root, dirs, files in os.walk(str(p), onerror=lambda err: None):
+                        for file in files:
+                            if file.lower().endswith('.mkv'):
+                                found_in_folder.append(os.path.join(root, file))
+
+                    found_in_folder.sort(key=lambda s: s.lower())
+                    total_found += len(found_in_folder)
+
+                    for file_path in found_in_folder:
+                        resolved = str(Path(file_path).resolve())
+                        if resolved not in self.mkv_files:
+                            self.mkv_files[resolved] = None
+                            added_count += 1
+                except Exception as e:
+                    self.log_text.append(f"Error scanning folder {p}: {str(e)}")
+
+        self.update_file_list_display()
+        if added_count > 0:
+            msg = f"Added {added_count} MKV file(s)"
+            self.statusBar().showMessage(msg)
+            self.log_text.append(f"✓ {msg}")
+        elif total_found > 0:
+            msg = "All MKV files in selected location(s) already in list"
+            self.statusBar().showMessage(msg)
+            self.log_text.append(f"ℹ {msg}")
+        else:
+            msg = "No MKV files found in selected location(s)"
+            self.statusBar().showMessage(msg)
+            self.log_text.append(f"ℹ {msg}")
+
     def add_files(self):
         """Add MKV files to the list"""
         files, _ = QFileDialog.getOpenFileNames(
             self, "Select MKV files", "", "MKV files (*.mkv);;All files (*.*)"
         )
+        if files:
+            self.add_paths(files)
 
-        for file_path in files:
-            if file_path not in self.mkv_files:
-                self.mkv_files[file_path] = None
+    def add_folders(self):
+        """Add one or more folders and recursively scan for MKV files"""
+        folders = []
+        dialog_succeeded = False
 
-        self.update_file_list_display()
-        self.statusBar().showMessage(f"Added {len(files)} files")
+        if sys.platform == 'win32':
+            try:
+                from ..utils.native_dialog import pick_multiple_folders
+                parent_hwnd = int(self.winId()) if self.winId() else 0
+                folders = pick_multiple_folders(
+                    parent_hwnd=parent_hwnd,
+                    title="Select Folder(s) to Scan for MKV Files"
+                )
+                dialog_succeeded = True
+            except Exception as e:
+                dialog_succeeded = False
+                self.log_text.append(f"Native folder dialog error ({e}), falling back to standard dialog...")
+
+        # Fallback if non-Windows or if native dialog failed with an error
+        if not dialog_succeeded:
+            selected_dir = QFileDialog.getExistingDirectory(
+                self, "Select Folder to Scan for MKV Files", "", QFileDialog.ShowDirsOnly
+            )
+            if selected_dir:
+                folders = [selected_dir]
+
+        if folders:
+            self.add_paths(folders)
 
     def clear_files(self):
         """Clear all files from the list"""
@@ -382,6 +471,7 @@ class MainWindow(QMainWindow):
         # Disable controls
         self.analyze_btn.setEnabled(False)
         self.add_files_btn.setEnabled(False)
+        self.add_folder_btn.setEnabled(False)
 
         # Start processing thread
         self.processing_thread = ProcessingThread(files_to_analyze)
@@ -411,6 +501,7 @@ class MainWindow(QMainWindow):
         """Handle analysis completion"""
         self.analyze_btn.setEnabled(True)
         self.add_files_btn.setEnabled(True)
+        self.add_folder_btn.setEnabled(True)
         self.progress_label.setText("Analysis complete")
 
         analyzed_count = sum(1 for data in self.mkv_files.values() if data and not data['error'])
@@ -434,19 +525,58 @@ class MainWindow(QMainWindow):
             return
 
         # Find the corresponding file path
-        selected_file = None
-        item_text = current_item.text()
-        # Remove [EXCLUDED] prefix if present
-        if item_text.startswith("[EXCLUDED] "):
-            item_text = item_text[11:]
+        selected_file = current_item.data(Qt.UserRole)
+        if not selected_file:
+            item_text = current_item.text()
+            # Remove [EXCLUDED] prefix if present
+            if item_text.startswith("[EXCLUDED] "):
+                item_text = item_text[11:]
 
-        for file_path in self.mkv_files.keys():
-            if Path(file_path).name == item_text:
-                selected_file = file_path
-                break
+            for file_path in self.mkv_files.keys():
+                if Path(file_path).name == item_text:
+                    selected_file = file_path
+                    break
 
-        if selected_file and self.mkv_files[selected_file]:
+        if selected_file and self.mkv_files.get(selected_file):
             self.update_preview_for_file(selected_file)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        if event.mimeData().hasUrls():
+            paths = [url.toLocalFile() for url in event.mimeData().urls() if url.toLocalFile()]
+            if paths:
+                self.add_paths(paths)
+                event.acceptProposedAction()
+
+    def eventFilter(self, source, event):
+        if source == self.file_list:
+            if event.type() == QEvent.DragEnter:
+                if event.mimeData().hasUrls():
+                    event.acceptProposedAction()
+                    return True
+            elif event.type() == QEvent.DragMove:
+                if event.mimeData().hasUrls():
+                    event.acceptProposedAction()
+                    return True
+            elif event.type() == QEvent.Drop:
+                if event.mimeData().hasUrls():
+                    paths = [url.toLocalFile() for url in event.mimeData().urls() if url.toLocalFile()]
+                    if paths:
+                        self.add_paths(paths)
+                    event.acceptProposedAction()
+                    return True
+        return super().eventFilter(source, event)
 
     def generate_names(self):
         """Generate proposed names and changes for all files"""
