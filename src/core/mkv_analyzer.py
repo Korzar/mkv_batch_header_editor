@@ -3,6 +3,7 @@ MKV file analysis functionality
 """
 
 import json
+import sys
 import subprocess
 from typing import Dict
 
@@ -14,10 +15,14 @@ class MKVAnalyzer:
     def analyze_file(file_path: str) -> Dict:
         """Analyze MKV file and extract track information using mkvmerge"""
         try:
+            extra_kwargs = {}
+            if sys.platform == 'win32':
+                extra_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+
             # Use mkvmerge to get JSON info about the file with UTF-8 encoding
             cmd = ['mkvmerge', '-J', file_path]
             result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8',
-                                    errors='replace', check=True)
+                                    errors='replace', check=True, **extra_kwargs)
 
             data = json.loads(result.stdout)
             tracks = []
