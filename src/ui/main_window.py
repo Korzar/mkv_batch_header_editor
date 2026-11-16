@@ -581,12 +581,70 @@ class MainWindow(QMainWindow):
     def generate_names(self):
         """Generate proposed names and changes for all files"""
         rules = self.rules_widget.get_rules()
-        self.proposed_changes.clear()
 
-        for file_path, data in self.mkv_files.items():
-            if not data or data['error'] or file_path in self.excluded_files:
-                continue
+        # Identify existing files that already have generated names, and newly analyzed files
+        existing_generated_files = [
+            f for f in self.proposed_changes.keys()
+            if f in self.mkv_files and self.mkv_files[f] and not self.mkv_files[f].get('error')
+        ]
+        new_files_to_generate = [
+            f for f, data in self.mkv_files.items()
+            if data and not data.get('error') and f not in self.excluded_files and f not in self.proposed_changes
+        ]
 
+        valid_files = [
+            f for f, data in self.mkv_files.items()
+            if data and not data.get('error') and f not in self.excluded_files
+        ]
+
+        if not valid_files:
+            QMessageBox.warning(self, "Warning", "No analyzed files available to generate names for.")
+            return
+
+        # If existing generated names already exist and there are new files to add, prompt the user
+        regenerate_all = True
+        if existing_generated_files and new_files_to_generate:
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("Generate Names")
+            msg_box.setIcon(QMessageBox.Question)
+            msg_box.setText(
+                "A list of generated names already exists, and new analyzed files are ready to be added."
+            )
+            msg_box.setInformativeText(
+                "How would you like to proceed?\n\n"
+                "• Add new files only: Adds only the new files to the names list, "
+                "keeping any manual edits to existing names intact.\n"
+                "• Regenerate all: Regenerates the complete list of names "
+                "(any manual edits performed beforehand will be lost).\n"
+                "• Cancel: Cancels the operation without making changes."
+            )
+
+            add_new_btn = msg_box.addButton("Add new files only", QMessageBox.AcceptRole)
+            regen_btn = msg_box.addButton("Regenerate all", QMessageBox.DestructiveRole)
+            cancel_btn = msg_box.addButton("Cancel", QMessageBox.RejectRole)
+
+            msg_box.setDefaultButton(add_new_btn)
+            msg_box.exec_()
+
+            clicked = msg_box.clickedButton()
+            if clicked == cancel_btn:
+                return
+            elif clicked == add_new_btn:
+                regenerate_all = False
+            else:
+                regenerate_all = True
+
+        if regenerate_all:
+            self.proposed_changes.clear()
+            files_to_process = [
+                (f, self.mkv_files[f]) for f in valid_files
+            ]
+        else:
+            files_to_process = [
+                (f, self.mkv_files[f]) for f in new_files_to_generate
+            ]
+
+        for file_path, data in files_to_process:
             # Initialize file changes
             file_changes = {
                 'title': data.get('title', ''),
@@ -619,7 +677,12 @@ class MainWindow(QMainWindow):
         self.update_preview_table()
         self.apply_btn.setEnabled(True)
 
-        self.statusBar().showMessage("Names and changes generated")
+        if not regenerate_all:
+            self.statusBar().showMessage(
+                f"Added {len(files_to_process)} new file(s) to names list (existing changes kept)"
+            )
+        else:
+            self.statusBar().showMessage("Names and changes generated")
 
     def update_preview_for_file(self, file_path: str):
         """Update preview table for a specific file"""
@@ -644,6 +707,7 @@ class MainWindow(QMainWindow):
 
     def update_preview_table(self):
         """Update the preview table with all files and tracks"""
+        self.preview_table.blockSignals(True)
         self.preview_table.setRowCount(0)
 
         row = 0
@@ -787,6 +851,8 @@ class MainWindow(QMainWindow):
                 row += 1
 
             file_index += 1
+
+        self.preview_table.blockSignals(False)
 
     def on_table_item_changed(self, item: QTableWidgetItem):
         """Handle changes in table items"""

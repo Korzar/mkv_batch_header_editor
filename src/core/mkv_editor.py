@@ -4,6 +4,7 @@ MKV file editing functionality
 
 import os
 import shutil
+import sys
 import subprocess
 from typing import Dict, Tuple
 
@@ -53,8 +54,12 @@ class MKVEditor:
 
             # Execute the command only if there are changes
             if len(cmd) > 2:  # More than just ['mkvpropedit', file_path]
+                extra_kwargs = {}
+                if sys.platform == 'win32':
+                    extra_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+
                 result = subprocess.run(cmd, capture_output=True, text=True,
-                                        encoding='utf-8', errors='replace', check=True)
+                                        encoding='utf-8', errors='replace', check=True, **extra_kwargs)
                 return True, "Successfully updated MKV properties"
             else:
                 return True, "No changes to apply"
