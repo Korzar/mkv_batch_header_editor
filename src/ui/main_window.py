@@ -198,9 +198,9 @@ class MainWindow(QMainWindow):
 
         # Preview table with enhanced columns
         self.preview_table = QTableWidget()
-        self.preview_table.setColumnCount(9)
+        self.preview_table.setColumnCount(10)
         self.preview_table.setHorizontalHeaderLabels([
-            "File", "Title", "Track type", "Current name", "Proposed name",
+            "File", "Title", "Track type", "Track ID", "Current name", "Proposed name",
             "Language", "Default", "Forced", "Info"
         ])
 
@@ -210,17 +210,18 @@ class MainWindow(QMainWindow):
         header.setStretchLastSection(True)  # Last section stretches to fill space
 
         # Set minimum column widths
-        header.setMinimumSectionSize(80)
+        header.setMinimumSectionSize(60)
 
         # Set initial column widths
         self.preview_table.setColumnWidth(0, 150)  # File
         self.preview_table.setColumnWidth(1, 150)  # Title
         self.preview_table.setColumnWidth(2, 100)  # Track type
-        self.preview_table.setColumnWidth(3, 200)  # Current name
-        self.preview_table.setColumnWidth(4, 200)  # Proposed name
-        self.preview_table.setColumnWidth(5, 100)  # Language
-        self.preview_table.setColumnWidth(6, 80)  # Default
-        self.preview_table.setColumnWidth(7, 80)  # Forced
+        self.preview_table.setColumnWidth(3, 70)   # Track ID
+        self.preview_table.setColumnWidth(4, 200)  # Current name
+        self.preview_table.setColumnWidth(5, 200)  # Proposed name
+        self.preview_table.setColumnWidth(6, 100)  # Language
+        self.preview_table.setColumnWidth(7, 80)   # Default
+        self.preview_table.setColumnWidth(8, 80)   # Forced
         # Info column will stretch
 
         # Make editable columns
@@ -738,7 +739,7 @@ class MainWindow(QMainWindow):
             self.preview_table.setItem(row, 1, title_item)
 
             # Fill other columns for title row
-            for col in range(2, 9):
+            for col in range(2, 10):
                 empty_item = QTableWidgetItem("")
                 empty_item.setBackground(bg_color)
                 if col == 2:
@@ -779,26 +780,33 @@ class MainWindow(QMainWindow):
                 type_item.setFlags(type_item.flags() & ~Qt.ItemIsEditable)
                 self.preview_table.setItem(row, 2, type_item)
 
+                # Track ID
+                id_item = QTableWidgetItem(str(track.get('track_id', '')))
+                id_item.setTextAlignment(Qt.AlignCenter)
+                id_item.setBackground(current_bg)
+                id_item.setFlags(id_item.flags() & ~Qt.ItemIsEditable)
+                self.preview_table.setItem(row, 3, id_item)
+
                 # Current name
                 current_name = track.get('name', '') or f"Track {track['track_id'] + 1}"
                 current_item = QTableWidgetItem(current_name)
                 current_item.setBackground(current_bg)
                 current_item.setFlags(current_item.flags() & ~Qt.ItemIsEditable)
-                self.preview_table.setItem(row, 3, current_item)
+                self.preview_table.setItem(row, 4, current_item)
 
                 # Proposed name (editable)
                 proposed_name = track_changes.get('name', '')
                 proposed_item = QTableWidgetItem(proposed_name)
                 proposed_item.setData(Qt.UserRole, ('track_name', file_path, track['track_id']))
                 proposed_item.setBackground(current_bg)
-                self.preview_table.setItem(row, 4, proposed_item)
+                self.preview_table.setItem(row, 5, proposed_item)
 
                 # Language (editable)
                 language = track_changes.get('language', track.get('language', 'und'))
                 lang_item = QTableWidgetItem(language)
                 lang_item.setData(Qt.UserRole, ('track_language', file_path, track['track_id']))
                 lang_item.setBackground(current_bg)
-                self.preview_table.setItem(row, 5, lang_item)
+                self.preview_table.setItem(row, 6, lang_item)
 
                 # Default checkbox
                 default_cb = QCheckBox()
@@ -813,7 +821,7 @@ class MainWindow(QMainWindow):
                 default_layout.setAlignment(Qt.AlignCenter)
                 default_layout.setContentsMargins(0, 0, 0, 0)
                 default_widget.setLayout(default_layout)
-                self.preview_table.setCellWidget(row, 6, default_widget)
+                self.preview_table.setCellWidget(row, 7, default_widget)
 
                 # Forced checkbox
                 forced_cb = QCheckBox()
@@ -828,7 +836,7 @@ class MainWindow(QMainWindow):
                 forced_layout.setAlignment(Qt.AlignCenter)
                 forced_layout.setContentsMargins(0, 0, 0, 0)
                 forced_widget.setLayout(forced_layout)
-                self.preview_table.setCellWidget(row, 7, forced_widget)
+                self.preview_table.setCellWidget(row, 8, forced_widget)
 
                 # Additional info
                 info_parts = []
@@ -846,7 +854,7 @@ class MainWindow(QMainWindow):
                 info_item = QTableWidgetItem(info)
                 info_item.setBackground(current_bg)
                 info_item.setFlags(info_item.flags() & ~Qt.ItemIsEditable)
-                self.preview_table.setItem(row, 8, info_item)
+                self.preview_table.setItem(row, 9, info_item)
 
                 row += 1
 
@@ -910,7 +918,7 @@ class MainWindow(QMainWindow):
 
         for row in range(self.preview_table.rowCount()):
             # Check if this row contains a video track name for the specific file
-            proposed_name_item = self.preview_table.item(row, 4)  # Proposed name column
+            proposed_name_item = self.preview_table.item(row, 5)  # Proposed name column
             if proposed_name_item:
                 data = proposed_name_item.data(Qt.UserRole)
                 if data:
@@ -976,7 +984,7 @@ class MainWindow(QMainWindow):
     def update_track_name_in_table(self, file_path: str, track_id: int, new_name: str):
         """Update a specific track name in the preview table"""
         for row in range(self.preview_table.rowCount()):
-            proposed_name_item = self.preview_table.item(row, 4)  # Proposed name column
+            proposed_name_item = self.preview_table.item(row, 5)  # Proposed name column
             if proposed_name_item:
                 data = proposed_name_item.data(Qt.UserRole)
                 if data:
